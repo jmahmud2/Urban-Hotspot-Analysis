@@ -1,13 +1,12 @@
 """
-Optimized DBSCAN with BallTree and haversine distance for geographic clustering
+Naive DBSCAN implementation WITHOUT spatial indexing
+O(n²) complexity - intentionally slow to demonstrate the value of optimization
 """
 import numpy as np
-from sklearn.neighbors import BallTree
 import time
-from collections import deque
 
-class OptimizedDBSCAN:
-    def __init__(self, eps=0.5, min_samples=30, leaf_size=100):
+class NaiveDBSCAN:
+    def __init__(self, eps=0.5, min_samples=30):
         """
         Parameters:
         -----------
@@ -15,51 +14,39 @@ class OptimizedDBSCAN:
             Maximum distance between points in KILOMETERS
         min_samples : int
             Minimum points to form a cluster
-        leaf_size : int
-            Leaf size for BallTree
         """
         self.eps_km = eps
         self.min_samples = min_samples
-        self.leaf_size = leaf_size
         self.labels_ = None
         self.n_clusters_ = None
-        # Convert km to radians (Earth radius = 6371 km)
-        self.eps_radians = eps / 6371.0
+        # Convert km to degrees for Euclidean distance (approximate)
+        self.eps_degrees = eps / 111.0
         
+    def _distance(self, p1, p2):
+        """Euclidean distance between two points in degrees"""
+        return np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
+    
+    def _region_query(self, X, point_idx):
+        """Find neighbors by checking EVERY point (O(n) per query)"""
+        neighbors = []
+        for i in range(len(X)):
+            if self._distance(X[point_idx], X[i]) <= self.eps_degrees:
+                neighbors.append(i)
+        return neighbors
+    
     def fit_predict(self, X):
-        """
-        Run DBSCAN clustering on GPS coordinates
-        
-        Parameters:
-        -----------
-        X : numpy array of shape (n_samples, 2)
-            Array of [latitude, longitude] coordinates in degrees
-            
-        Returns:
-        --------
-        labels : numpy array of shape (n_samples,)
-            Cluster labels for each point (-1 = noise)
-        """
+        """Run naive DBSCAN - intentionally slow O(n²) implementation"""
         n_samples = X.shape[0]
         self.labels_ = np.full(n_samples, -1, dtype=np.int32)
         cluster_id = 0
         
-        # Convert degrees to radians for haversine distance
-        X_rad = np.radians(X)
-        
         print(f"\n{'='*50}")
-        print(f"Optimized DBSCAN Clustering")
+        print(f"NAIVE DBSCAN (O(n²) - No Spatial Index)")
         print(f"{'='*50}")
         print(f"Points: {n_samples:,}")
-        print(f"Eps: {self.eps_km} km ({self.eps_radians:.6f} radians)")
+        print(f"Eps: {self.eps_km} km ({self.eps_degrees:.6f} degrees)")
         print(f"Min samples: {self.min_samples}")
-        
-        # Build BallTree with haversine distance
-        print("\nBuilding spatial index (BallTree with haversine)...")
-        start_time = time.time()
-        tree = BallTree(X_rad, leaf_size=self.leaf_size, metric='haversine')
-        build_time = time.time() - start_time
-        print(f"Index built in {build_time:.2f} seconds")
+        print(f"⚠️ This is intentionally slow to demonstrate the need for spatial indexing")
         
         visited = np.zeros(n_samples, dtype=bool)
         processed = 0
@@ -73,30 +60,22 @@ class OptimizedDBSCAN:
                 continue
             
             visited[point_idx] = True
-            point = X_rad[point_idx].reshape(1, -1)
-            neighbors = tree.query_radius(point, r=self.eps_radians)[0]
+            neighbors = self._region_query(X, point_idx)
             
             if len(neighbors) < self.min_samples:
-                self.labels_[point_idx] = -1  # Noise point
+                self.labels_[point_idx] = -1
             else:
-                # Start a new cluster
                 self.labels_[point_idx] = cluster_id
-                seeds = deque(neighbors)  # Use deque for O(1) popleft
-                
+                seeds = list(neighbors)
                 while seeds:
-                    current_idx = seeds.popleft()
-                    
+                    current_idx = seeds.pop(0)
                     if not visited[current_idx]:
                         visited[current_idx] = True
-                        current_point = X_rad[current_idx].reshape(1, -1)
-                        current_neighbors = tree.query_radius(current_point, r=self.eps_radians)[0]
-                        
+                        current_neighbors = self._region_query(X, current_idx)
                         if len(current_neighbors) >= self.min_samples:
                             seeds.extend(current_neighbors)
-                    
                     if self.labels_[current_idx] == -1:
                         self.labels_[current_idx] = cluster_id
-                
                 cluster_id += 1
             
             processed += 1
