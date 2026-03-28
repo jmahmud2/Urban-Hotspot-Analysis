@@ -17,9 +17,8 @@ python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 
-Data Setup
+1. Data Setup
 Place Uber CSV files in data/ folder. Download from: https://github.com/fivethirtyeight/uber-tlc-foil-response
-
 data/
 ├── uber-raw-data-apr14.csv
 ├── uber-raw-data-may14.csv
@@ -28,14 +27,13 @@ data/
 ├── uber-raw-data-aug14.csv
 └── uber-raw-data-sep14.csv
 
-Run Analysis
-
+2. Run Analysis
 python test_clusters.py        # Quick test (5,000 points)
 python fair_comparison.py      # Full comparison (1,000-10,000 points)
 Output
 Results saved to results/ folder:
 
-File	Description
+3. File	Description
 execution_time_comparison.png	Time comparison: Naive vs Optimized
 speedup_factor.png	Speedup factor graph
 clusters_comparison.png	Cluster count comparison
@@ -48,7 +46,7 @@ hotspot_ranking.png	Top 10 hotspots with location names
 borough_distribution.png	Hotspot distribution across NYC boroughs
 comprehensive_dashboard.png	All metrics combined dashboard
 
-Project Structure
+4. Project Structure
 Urban-Hotspot-Analysis/
 ├── data/                          # CSV files here
 ├── results/                       # Output visualizations
@@ -58,9 +56,9 @@ Urban-Hotspot-Analysis/
 ├── load_uber_data.py              # Data loader
 ├── fair_comparison.py             # Main script
 ├── test_clusters.py               # Quick test
-└── requirements.txt               # Dependencies
-Dependencies
-
+└── requirements.txt 
+              # Dependencies
+5. Dependencies
 numpy==1.24.3
 pandas==2.0.3
 matplotlib==3.7.2
