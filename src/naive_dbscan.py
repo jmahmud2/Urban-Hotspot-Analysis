@@ -1,6 +1,5 @@
 """
-Naive DBSCAN implementation WITHOUT spatial indexing
-O(n²) complexity - intentionally slow to demonstrate the value of optimization
+Naive DBSCAN - Vectorized baseline for fair comparison
 """
 import numpy as np
 import time
@@ -15,38 +14,60 @@ class NaiveDBSCAN:
         min_samples : int
             Minimum points to form a cluster
         """
-        self.eps_km = eps
+        self.eps_meters = eps * 1000
         self.min_samples = min_samples
         self.labels_ = None
         self.n_clusters_ = None
-        # Convert km to degrees for Euclidean distance (approximate)
-        self.eps_degrees = eps / 111.0
         
-    def _distance(self, p1, p2):
-        """Euclidean distance between two points in degrees"""
-        return np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
+        # NYC projection to local coordinates (meters)
+        try:
+            from pyproj import Transformer
+            self.transformer = Transformer.from_crs("EPSG:4326", "EPSG:2263", always_xy=True)
+            self.use_projection = True
+        except ImportError:
+            print("⚠️ pyproj not installed. Using approximate projection.")
+            self.use_projection = False
+            # Approximate conversion for NYC (1° ≈ 111km lat, 88km lon)
+            self.lat_m_per_deg = 111000
+            self.lon_m_per_deg = 88000
+            self.ref_lat = 40.7580
+            self.ref_lon = -73.9855
     
-    def _region_query(self, X, point_idx):
-        """Find neighbors by checking EVERY point (O(n) per query)"""
-        neighbors = []
-        for i in range(len(X)):
-            if self._distance(X[point_idx], X[i]) <= self.eps_degrees:
-                neighbors.append(i)
-        return neighbors
+    def _project(self, X):
+        """Convert lat/lon to local coordinates in meters"""
+        n = len(X)
+        X_proj = np.zeros((n, 2), dtype=np.float32)
+        
+        if self.use_projection:
+            for i, (lat, lon) in enumerate(X):
+                x, y = self.transformer.transform(lon, lat)
+                X_proj[i, 0] = x
+                X_proj[i, 1] = y
+        else:
+            for i, (lat, lon) in enumerate(X):
+                X_proj[i, 0] = (lon - self.ref_lon) * self.lon_m_per_deg
+                X_proj[i, 1] = (lat - self.ref_lat) * self.lat_m_per_deg
+        
+        return X_proj
     
     def fit_predict(self, X):
-        """Run naive DBSCAN - intentionally slow O(n²) implementation"""
-        n_samples = X.shape[0]
+        """Run naive DBSCAN with vectorized queries"""
+        print("="*50)
+        print("NAIVE DBSCAN (Vectorized Baseline)")
+        print("="*50)
+        
+        print("\nProjecting coordinates to local system...")
+        start = time.time()
+        X_proj = self._project(X)
+        print(f"  Projection took {time.time() - start:.2f}s")
+        
+        n_samples = X_proj.shape[0]
         self.labels_ = np.full(n_samples, -1, dtype=np.int32)
         cluster_id = 0
         
-        print(f"\n{'='*50}")
-        print(f"NAIVE DBSCAN (O(n²) - No Spatial Index)")
-        print(f"{'='*50}")
         print(f"Points: {n_samples:,}")
-        print(f"Eps: {self.eps_km} km ({self.eps_degrees:.6f} degrees)")
+        print(f"Eps: {self.eps_meters/1000:.1f} km ({self.eps_meters:.0f} meters)")
         print(f"Min samples: {self.min_samples}")
-        print(f"⚠️ This is intentionally slow to demonstrate the need for spatial indexing")
         
         visited = np.zeros(n_samples, dtype=bool)
         processed = 0
@@ -60,7 +81,11 @@ class NaiveDBSCAN:
                 continue
             
             visited[point_idx] = True
-            neighbors = self._region_query(X, point_idx)
+            
+            # Vectorized distance calculation
+            point = X_proj[point_idx]
+            distances = np.sqrt(np.sum((X_proj - point) ** 2, axis=1))
+            neighbors = np.where(distances <= self.eps_meters)[0].tolist()
             
             if len(neighbors) < self.min_samples:
                 self.labels_[point_idx] = -1
@@ -71,7 +96,9 @@ class NaiveDBSCAN:
                     current_idx = seeds.pop(0)
                     if not visited[current_idx]:
                         visited[current_idx] = True
-                        current_neighbors = self._region_query(X, current_idx)
+                        current_point = X_proj[current_idx]
+                        current_distances = np.sqrt(np.sum((X_proj - current_point) ** 2, axis=1))
+                        current_neighbors = np.where(current_distances <= self.eps_meters)[0].tolist()
                         if len(current_neighbors) >= self.min_samples:
                             seeds.extend(current_neighbors)
                     if self.labels_[current_idx] == -1:
