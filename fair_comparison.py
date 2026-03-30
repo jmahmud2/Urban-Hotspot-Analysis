@@ -28,7 +28,7 @@ COLORS = {
 }
 
 def compute_cluster_metrics(labels, X_proj):
-    """Compute various cluster quality metrics"""
+    """Compute cluster quality metrics with memory-efficient sampling"""
     
     n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
     n_noise = np.sum(labels == -1)
@@ -46,28 +46,27 @@ def compute_cluster_metrics(labels, X_proj):
     
     # Average cluster size
     avg_cluster_size = np.mean(cluster_sizes) if cluster_sizes else 0
-    
-    # Cluster size std (uniformity)
     cluster_size_std = np.std(cluster_sizes) if cluster_sizes else 0
-    
-    # Largest cluster
     largest_cluster = max(cluster_sizes) if cluster_sizes else 0
-    
-    # Smallest cluster
     smallest_cluster = min(cluster_sizes) if cluster_sizes else 0
     
-    # Intra-cluster distances (compactness)
+    # Intra-cluster distances - SAMPLING to avoid memory explosion
     intra_distances = []
     for label in set(labels):
         if label != -1:
             cluster_points = X_proj[labels == label]
             if len(cluster_points) > 1:
-                distances = pdist(cluster_points)
-                intra_distances.extend(distances)
+                # Sample up to 500 points per cluster for distance calculation
+                if len(cluster_points) > 500:
+                    sample_idx = np.random.choice(len(cluster_points), 500, replace=False)
+                    cluster_points = cluster_points[sample_idx]
+                if len(cluster_points) > 1:
+                    distances = pdist(cluster_points)
+                    intra_distances.extend(distances)
     
     avg_intra_distance = np.mean(intra_distances) if intra_distances else 0
     
-    # Inter-cluster distances (separation)
+    # Inter-cluster distances (centroids only, no memory issue)
     inter_distances = []
     for i, c1 in enumerate(cluster_centroids):
         for j, c2 in enumerate(cluster_centroids):
@@ -823,6 +822,7 @@ def run_comparison():
     print("Both implementations use EPSG:2263 projection + Euclidean distance in meters")
     print("="*80)
     
+    # Test sizes - you can modify this list
     test_sizes = [10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000]
     results = []
     
@@ -861,9 +861,10 @@ def run_comparison():
         
         print(f"  Time: {naive_time:.2f}s | Clusters: {naive_metrics['n_clusters']:.0f} | Noise: {naive_metrics['noise_pct']:.1f}%")
         
-        # Generate cluster map for naive
-        generate_cluster_map(X, naive_labels, 'Naive DBSCAN', n_points, 
-                            f'results/cluster_maps/naive_{n_points}.png')
+        # Generate cluster map for naive (only for sizes up to 50k to save time)
+        if n_points <= 50000:
+            generate_cluster_map(X, naive_labels, 'Naive DBSCAN', n_points, 
+                                f'results/cluster_maps/naive_{n_points}.png')
         
         # ========== OPTIMIZED DBSCAN ==========
         print("\n[2/2] Running Optimized DBSCAN (Custom Grid Index)...")
@@ -879,9 +880,10 @@ def run_comparison():
         
         print(f"  Time: {opt_time:.2f}s | Clusters: {opt_metrics['n_clusters']:.0f} | Noise: {opt_metrics['noise_pct']:.1f}%")
         
-        # Generate cluster map for optimized
-        generate_cluster_map(X, opt_labels, 'Optimized DBSCAN', n_points,
-                            f'results/cluster_maps/optimized_{n_points}.png')
+        # Generate cluster map for optimized (only for sizes up to 50k to save time)
+        if n_points <= 50000:
+            generate_cluster_map(X, opt_labels, 'Optimized DBSCAN', n_points,
+                                f'results/cluster_maps/optimized_{n_points}.png')
         
         speedup = naive_time / opt_time
         print(f"\n🚀 SPEEDUP: {speedup:.1f}x faster!")
@@ -951,7 +953,7 @@ def run_comparison():
         print("  15. scaling_comparison.png")
         print("  16. comprehensive_dashboard.png")
         print("  17. performance_table.png")
-        print("  18. cluster_maps/ - 12 cluster maps (6 naive + 6 optimized)")
+        print("  18. cluster_maps/ - cluster maps (up to 50k points)")
         
         print("\n" + "="*80)
         print("SUMMARY STATISTICS")
