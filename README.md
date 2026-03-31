@@ -2,63 +2,67 @@
 
 ## Overview
 
-This project implements an optimized DBSCAN (Density-Based Spatial Clustering of Applications with Noise) algorithm using a custom grid-based spatial index for detecting urban hotspots from NYC Uber pickup data. The implementation is compared against a vectorized naive baseline to demonstrate the effectiveness of spatial indexing.
+This project implements an optimized DBSCAN (Density-Based Spatial Clustering of Applications with Noise) algorithm using a **custom grid-based spatial index** for detecting urban hotspots from NYC Uber pickup data. The implementation is rigorously benchmarked against a vectorized naive baseline with **5 runs per test size**, reporting **mean ± standard deviation** for statistical significance.
 
 ## Key Results
 
-| Points | Naive Time | Optimized Time | Speedup | Clusters |
-|--------|------------|----------------|---------|----------|
-| 1,000 | 0.03s | 0.03s | 1.0x | 2 |
-| 2,000 | 0.10s | 0.11s | 0.9x | 3 |
-| 5,000 | 0.52s | 0.24s | **2.1x** | 6 |
-| 10,000 | 1.88s | 0.68s | **2.8x** | 6 |
-| 20,000 | 7.37s | 2.23s | **3.3x** | 11 |
-| 50,000 | 44.99s | 11.85s | **3.8x** | 12 |
+| Points | Naive Time (s) | Optimized Time (s) | Speedup | ARI | Clusters |
+|--------|----------------|--------------------|---------|-----|----------|
+| 10,000 | 1.69 ± 0.00 | 0.66 ± 0.00 | 2.6x | 1.000 | 6 |
+| 20,000 | 10.93 ± 0.00 | 3.62 ± 0.00 | 3.0x | 1.000 | 11 |
+| 30,000 | 23.24 ± 0.00 | 6.44 ± 2.45 | 3.6x | 1.000 | 14 |
+| 40,000 | 46.41 ± 4.12 | 14.30 ± 4.33 | 3.2x | 1.000 | 12 |
+| 50,000 | 67.88 ± 22.67 | 21.06 ± 7.53 | 3.2x | 1.000 | 12 |
+| 60,000 | 133.70 ± 20.08 | 44.04 ± 2.53 | 3.0x | 1.000 | 12 |
+| 70,000 | 238.52 ± 9.73 | 54.43 ± 6.13 | **4.4x** | 1.000 | 13 |
+| 80,000 | 283.87 ± 22.72 | 75.66 ± 3.20 | 3.8x | 1.000 | 14 |
+| 90,000 | 379.61 ± 31.52 | 82.23 ± 22.77 | 4.6x | 1.000 | 18 |
+| 100,000 | 381.97 ± 78.32 | 73.72 ± 27.45 | **5.2x** | 1.000 | 17 |
 
-- **Best Speedup**: 3.8x at 50,000 points
-- **Noise Reduction**: 92% (from 52.9% to 4.4%)
-- **Scaling Exponent**: Naive: 1.87, Optimized: 1.45 (theoretical O(n²) = 2.0)
+- **Best Speedup**: 5.2x ± 2.2x at 100,000 points
+- **Noise Reduction**: 78% (from 12.8% at 10k to 2.9% at 100k)
+- **Correctness**: Perfect cluster agreement (ARI = 1.000)
+- **Scaling Exponent**: Naive: 2.41 | Optimized: 2.17 (theoretical O(n²) = 2.0)
 
 ## Features
 
-- ✅ Custom grid-based spatial index (implemented from scratch)
-- ✅ EPSG:2263 projection with correct feet-to-meters conversion
-- ✅ Vectorized naive baseline for fair comparison
-- ✅ 17 performance visualizations
-- ✅ 12 cluster maps showing actual geographic clustering
-- ✅ Size-independent observations (scaling exponents, crossover point, noise reduction)
+- ✅ **Custom grid-based spatial index** (implemented from scratch, not sklearn)
+- ✅ **EPSG:2263 projection** with correct feet-to-meters conversion
+- ✅ **Vectorized naive baseline** for fair comparison
+- ✅ **5 runs per test size** with mean ± standard deviation
+- ✅ **Error bars** on all performance plots
+- ✅ **ARI validation** proving both implementations produce identical clusters
+- ✅ **Phase-wise timing breakdown** (projection, index build, clustering)
+- ✅ **12 cluster maps** showing actual geographic clustering at 10k, 50k, 100k points
+- ✅ **Statistically rigorous benchmarking**
 
 ## Project Structure
 
 Urban-Hotspot-Analysis/
 ├── data/ # Place CSV files here
 ├── results/ # Generated output
-│ ├── execution_time_comparison.png
-│ ├── speedup_factor.png
-│ ├── cluster_comparison.png
-│ ├── noise_comparison.png
-│ ├── cluster_quality.png
-│ ├── cluster_size_comparison.png
-│ ├── processing_rate.png
-│ ├── scalability_analysis.png
-│ ├── scaling_exponent_analysis.png
-│ ├── speedup_trend.png
-│ ├── performance_heatmap.png
-│ ├── efficiency_convergence.png
-│ ├── overhead_benefit_analysis.png
-│ ├── cluster_quality_dashboard.png
-│ ├── scaling_comparison.png
-│ ├── comprehensive_dashboard.png
-│ ├── performance_table.png
-│ ├── fair_comparison_results.csv
-│ └── cluster_maps/ # 12 cluster maps
-│ ├── naive_1000.png ... naive_50000.png
-│ └── optimized_1000.png ... optimized_50000.png
+│ ├── execution_time_comparison.png # Time with error bars
+│ ├── speedup_factor.png # Speedup with error bars
+│ ├── ari_comparison.png # Correctness verification
+│ ├── phase_timing_breakdown.png # Phase-wise timing
+│ ├── processing_rate.png # Points/sec comparison
+│ ├── cluster_comparison.png # Cluster count comparison
+│ ├── noise_comparison.png # Noise reduction
+│ ├── cluster_quality.png # Separation ratio
+│ ├── performance_table.png # Summary table
+│ ├── fair_comparison_results.csv # Raw data
+│ └── cluster_maps/ # 6 cluster maps
+│ ├── naive_10000.png
+│ ├── naive_50000.png
+│ ├── naive_100000.png
+│ ├── optimized_10000.png
+│ ├── optimized_50000.png
+│ └── optimized_100000.png
 ├── src/
-│ ├── naive_dbscan.py # Vectorized baseline
+│ ├── naive_dbscan.py # Vectorized baseline (with in_queue)
 │ └── optimized_dbscan.py # Custom grid index + DBSCAN
 ├── load_uber_data.py # Data loader
-├── fair_comparison.py # Main comparison script
+├── fair_comparison.py # Main benchmark script
 └── requirements.txt # Dependencies
 
 
@@ -71,11 +75,11 @@ Urban-Hotspot-Analysis/
 ### Steps
 
 1. **Clone the repository**
-
+`
 git clone https://github.com/jmahmud2/Urban-Hotspot-Analysis.git
 cd Urban-Hotspot-Analysis
 
-2. **Create virtual environment**
+2. **Create virtual envrionment**
 
 python -m venv venv
 
@@ -91,7 +95,7 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 
-Data Setup:
+**Data Setup**
 
 Download the NYC Uber pickup data from FiveThirtyEight's Uber FOIL Response and place the CSV files in the data/ folder:
 
@@ -103,42 +107,48 @@ data/
 ├── uber-raw-data-aug14.csv
 └── uber-raw-data-sep14.csv
 
-Usage:
+**Usage**
 
-Quick Test (5,000 points)
-python test_clusters.py
-
-
-Full Comparison:
+Run Full Benchmark (5 runs per test size, 10k to 100k points): 
 
 python fair_comparison.py
 
-This runs tests on progressive dataset sizes (10,000 to 100,000 points) and generates all visualizations.
+**Custom Test Sizes**
 
+Edit the test_sizes list in fair_comparison.py: 
 
-Custom Test Sizes
-Edit the test_sizes list in fair_comparison.py:
+test_sizes = [10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000]
 
-test_sizes = [1000, 2000, 5000, 10000, 20000, 50000]  # Change as needed
+**Change Number of Runs**
 
-Implementation Details:
+Edit the N_RUNS variable at the top of fair_comparison.py:
 
-Naive DBSCAN
+N_RUNS = 5  # Change to 3 for faster runs
+
+**Implementation Details**
+
+Naive DBSCAN (Baseline):
 
 Complexity: O(n²)
 Distance: Euclidean on projected meters
-Optimizations: Vectorized NumPy operations
+Optimizations: Vectorized NumPy operations, deque for O(1) queue, duplicate prevention
 Purpose: Fair baseline for comparison
 
-Optimized DBSCAN
-
+Optimized DBSCAN (Our Contribution):
 Complexity: O(n log n) in practice
 Spatial Index: Custom grid-based index (implemented from scratch)
 Distance: Euclidean on projected meters (EPSG:2263 with feet-to-meters conversion)
-Optimizations: Deque for O(1) queue operations, vectorized candidate filtering
+Optimizations: Deque for O(1) queue operations, vectorized candidate filtering, duplicate prevention
 
-Acknowledgments:
+**Dependencies**
+
+numpy==1.24.3
+pandas==2.0.3
+matplotlib==3.7.2
+scipy==1.10.1
+pyproj==3.6.0
+scikit-learn==1.3.0
+
+**Acknowledgements**
 
 NYC Taxi & Limousine Commission for data release
-
-FiveThirtyEight for FOIL request and data publication
