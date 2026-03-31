@@ -1,6 +1,7 @@
 """
 Optimized DBSCAN with custom Grid Index - Implemented from scratch
-Fixed: Correct EPSG:2263 units (feet to meters conversion)
+- Added duplicate prevention (in_queue array)
+- Added phase timing methods
 """
 import numpy as np
 import time
@@ -107,37 +108,29 @@ class OptimizedDBSCAN:
         
         return X_proj
     
+    def _build_grid_index(self, X_proj):
+        """Build grid index from projected points"""
+        return GridIndex(X_proj, cell_size_meters=self.cell_size_meters)
+    
     def fit_predict(self, X):
-        print("="*50)
-        print("OPTIMIZED DBSCAN (Custom Grid Index)")
-        print("="*50)
-        
-        print("\nProjecting coordinates to local system (meters)...")
-        start = time.time()
+        """Run DBSCAN with custom grid index"""
         X_proj = self._project(X)
-        print(f"  Projection took {time.time() - start:.2f}s")
-        
+        self.grid_index = self._build_grid_index(X_proj)
+        return self.fit_predict_phased(X_proj)
+    
+    def fit_predict_phased(self, X_proj):
+        """
+        Run DBSCAN with custom grid index (expects projected points)
+        For phase timing: projection and index building are separate
+        """
         n_samples = X_proj.shape[0]
         self.labels_ = np.full(n_samples, -1, dtype=np.int32)
         cluster_id = 0
         
-        print(f"Points: {n_samples:,}")
-        print(f"Eps: {self.eps_km} km ({self.eps_meters:.0f} meters)")
-        print(f"Min samples: {self.min_samples}")
-        print(f"Grid cell size: {self.cell_size_meters:.0f} meters")
-        
-        print("\nBuilding grid index...")
-        start = time.time()
-        self.grid_index = GridIndex(X_proj, cell_size_meters=self.cell_size_meters)
-        print(f"  Index built in {time.time() - start:.2f}s")
-        
         visited = np.zeros(n_samples, dtype=bool)
-        in_queue = np.zeros(n_samples, dtype=bool)
+        in_queue = np.zeros(n_samples, dtype=bool)  # Duplicate prevention
         processed = 0
         batch_size = max(1000, n_samples // 20)
-        
-        print("\nClustering points...")
-        start_time = time.time()
         
         for point_idx in range(n_samples):
             if visited[point_idx]:
@@ -175,19 +168,7 @@ class OptimizedDBSCAN:
             
             processed += 1
             if processed % batch_size == 0:
-                elapsed = time.time() - start_time
-                rate = processed / elapsed
-                print(f"  Processed {processed:,}/{n_samples:,} points ({rate:.0f} pts/sec)")
+                pass  # Progress handled by caller
         
-        elapsed_time = time.time() - start_time
         self.n_clusters_ = cluster_id
-        n_noise = np.sum(self.labels_ == -1)
-        
-        print(f"\n{'='*50}")
-        print(f"Results")
-        print(f"{'='*50}")
-        print(f"Time: {elapsed_time:.2f} seconds")
-        print(f"Clusters: {self.n_clusters_}")
-        print(f"Noise: {n_noise:,} ({n_noise/n_samples*100:.1f}%)")
-        
         return self.labels_

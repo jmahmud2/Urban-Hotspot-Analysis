@@ -1,6 +1,7 @@
 """
 Naive DBSCAN - Vectorized baseline for fair comparison
-Fixed: Correct EPSG:2263 units (feet to meters conversion) + deque for O(1) pops
+- Added duplicate prevention (in_queue array)
+- Added phase timing methods
 """
 import numpy as np
 import time
@@ -17,7 +18,6 @@ class NaiveDBSCAN:
             Minimum points to form a cluster
         """
         self.eps_km = eps
-        # Convert km to meters (true meters, not feet)
         self.eps_meters = eps * 1000
         self.min_samples = min_samples
         self.labels_ = None
@@ -26,8 +26,6 @@ class NaiveDBSCAN:
         # NYC projection to local coordinates
         try:
             from pyproj import Transformer
-            # EPSG:2263 returns US survey feet, need to convert to meters
-            # 1 US survey foot = 0.3048006096012192 meters
             self.transformer = Transformer.from_crs("EPSG:4326", "EPSG:2263", always_xy=True)
             self.use_projection = True
             self.feet_to_meters = 0.3048006096012192
@@ -47,7 +45,6 @@ class NaiveDBSCAN:
         if self.use_projection:
             for i, (lat, lon) in enumerate(X):
                 x_feet, y_feet = self.transformer.transform(lon, lat)
-                # Convert feet to meters
                 X_proj[i, 0] = x_feet * self.feet_to_meters
                 X_proj[i, 1] = y_feet * self.feet_to_meters
         else:
@@ -65,29 +62,25 @@ class NaiveDBSCAN:
     
     def fit_predict(self, X):
         """Run naive DBSCAN with vectorized queries"""
-        print("="*50)
-        print("NAIVE DBSCAN (Vectorized Baseline)")
-        print("="*50)
-        
-        print("\nProjecting coordinates to local system (meters)...")
-        start = time.time()
         X_proj = self._project(X)
-        print(f"  Projection took {time.time() - start:.2f}s")
+        return self.fit_predict_phased(X, X_proj)
+    
+    def fit_predict_phased(self, X, X_proj=None):
+        """
+        Run naive DBSCAN with phase timing support.
+        If X_proj is provided, uses it directly (for phase timing).
+        """
+        if X_proj is None:
+            X_proj = self._project(X)
         
         n_samples = X_proj.shape[0]
         self.labels_ = np.full(n_samples, -1, dtype=np.int32)
         cluster_id = 0
         
-        print(f"Points: {n_samples:,}")
-        print(f"Eps: {self.eps_km} km ({self.eps_meters:.0f} meters)")
-        print(f"Min samples: {self.min_samples}")
-        
         visited = np.zeros(n_samples, dtype=bool)
+        in_queue = np.zeros(n_samples, dtype=bool)  # Duplicate prevention
         processed = 0
         batch_size = max(1000, n_samples // 20)
-        
-        print("\nClustering points...")
-        start_time = time.time()
         
         for point_idx in range(n_samples):
             if visited[point_idx]:
@@ -100,34 +93,29 @@ class NaiveDBSCAN:
                 self.labels_[point_idx] = -1
             else:
                 self.labels_[point_idx] = cluster_id
-                # FIX: Use deque for O(1) popleft
                 seeds = deque(neighbors)
+                for seed in neighbors:
+                    in_queue[seed] = True
+                
                 while seeds:
                     current_idx = seeds.popleft()
+                    in_queue[current_idx] = False
+                    
                     if not visited[current_idx]:
                         visited[current_idx] = True
                         current_neighbors = self._region_query_vectorized(X_proj, current_idx)
                         if len(current_neighbors) >= self.min_samples:
-                            seeds.extend(current_neighbors)
+                            for nb in current_neighbors:
+                                if not visited[nb] and not in_queue[nb]:
+                                    seeds.append(nb)
+                                    in_queue[nb] = True
                     if self.labels_[current_idx] == -1:
                         self.labels_[current_idx] = cluster_id
                 cluster_id += 1
             
             processed += 1
             if processed % batch_size == 0:
-                elapsed = time.time() - start_time
-                rate = processed / elapsed
-                print(f"  Processed {processed:,}/{n_samples:,} points ({rate:.0f} pts/sec)")
+                pass  # Progress handled by caller
         
-        elapsed_time = time.time() - start_time
         self.n_clusters_ = cluster_id
-        n_noise = np.sum(self.labels_ == -1)
-        
-        print(f"\n{'='*50}")
-        print(f"Results")
-        print(f"{'='*50}")
-        print(f"Time: {elapsed_time:.2f} seconds")
-        print(f"Clusters: {self.n_clusters_}")
-        print(f"Noise: {n_noise:,} ({n_noise/n_samples*100:.1f}%)")
-        
         return self.labels_
